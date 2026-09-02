@@ -1,0 +1,15 @@
+# Signed confidentiality declarations — never publish
+Declaration of Confidentiality*.pdf
+
+# Third-party copyrighted paper — link to it, don't redistribute
+ahmaditeshnizi24a.pdf
+
+# OS / Python noise
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+
+# Never commit credentials
+.env
+*.key

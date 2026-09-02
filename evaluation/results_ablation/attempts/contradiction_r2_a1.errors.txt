@@ -1,0 +1,4 @@
+Your JSON failed checkpoint 'meaning'. Fix ONLY these problems and output the full corrected JSON:
+- [EMPTY_EXPR] at constraints.cut_grade_limit_30pct.rhs: expression has no terms and no constant
+- [EMPTY_EXPR] at constraints.capital_high_price.rhs: expression has no terms and no constant
+- [EMPTY_EXPR] at constraints.cut_grade_limit_20pct.rhs: expression has no terms and no constant

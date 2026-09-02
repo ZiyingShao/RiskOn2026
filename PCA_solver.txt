@@ -1,0 +1,893 @@
+# ============================================================
+# GENERAL TRACK-B PORTFOLIO OPTIMIZER
+#
+# Requirements:
+# !pip install ortools scikit-learn pandas numpy
+#
+# ============================================================
+
+import pandas as pd
+import numpy as np
+
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+
+from ortools.linear_solver import pywraplp
+
+
+# ============================================================
+# 1. PCA PREPROCESSING
+# ============================================================
+
+def apply_safe_pca(
+    df,
+    protected_columns,
+    variance_to_keep=0.95
+):
+    """
+    Apply PCA ONLY to numeric columns that are NOT directly
+    needed by the optimization model.
+
+    protected_columns:
+        columns used in:
+            - objective
+            - budget
+            - constraints
+
+    Example protected columns:
+        {"price", "carat", "cut"}
+
+    PCA is applied to remaining numeric characteristics such as:
+        depth, table, x, y, z
+
+    Returns
+    -------
+    reduced_df
+    pca_info
+    """
+
+    df = df.copy()
+
+    # --------------------------------------------------------
+    # Find numeric columns
+    # --------------------------------------------------------
+
+    numeric_columns = df.select_dtypes(
+        include=[np.number]
+    ).columns.tolist()
+
+    # --------------------------------------------------------
+    # Columns allowed to undergo PCA
+    # --------------------------------------------------------
+
+    pca_columns = [
+        col
+        for col in numeric_columns
+        if col not in protected_columns
+    ]
+
+    # Nothing available for PCA
+    if len(pca_columns) < 2:
+
+        return df, {
+            "pca_applied": False,
+            "original_pca_columns": pca_columns,
+            "n_components": len(pca_columns)
+        }
+
+    # --------------------------------------------------------
+    # Clean PCA data
+    # --------------------------------------------------------
+
+    X = df[pca_columns].copy()
+
+    # Median imputation
+    X = X.fillna(X.median())
+
+    # --------------------------------------------------------
+    # Standardization
+    #
+    # PCA should usually be run on standardized variables
+    # because the features can have very different scales.
+    # --------------------------------------------------------
+
+    scaler = StandardScaler()
+
+    X_scaled = scaler.fit_transform(X)
+
+    # --------------------------------------------------------
+    # PCA
+    #
+    # Keep enough PCs to explain variance_to_keep
+    # --------------------------------------------------------
+
+    pca = PCA(
+        n_components=variance_to_keep
+    )
+
+    X_pca = pca.fit_transform(X_scaled)
+
+    # --------------------------------------------------------
+    # Create PC columns
+    # --------------------------------------------------------
+
+    pc_names = [
+        f"PC{i + 1}"
+        for i in range(X_pca.shape[1])
+    ]
+
+    pca_df = pd.DataFrame(
+        X_pca,
+        columns=pc_names,
+        index=df.index
+    )
+
+    # --------------------------------------------------------
+    # Construct reduced dataset
+    #
+    # Keep:
+    #   protected original variables
+    #   categorical variables
+    #   PCA components
+    # --------------------------------------------------------
+
+    categorical_columns = df.select_dtypes(
+        exclude=[np.number]
+    ).columns.tolist()
+
+    keep_original = list(
+        dict.fromkeys(
+            list(protected_columns)
+            + categorical_columns
+        )
+    )
+
+    keep_original = [
+        col
+        for col in keep_original
+        if col in df.columns
+    ]
+
+    reduced_df = pd.concat(
+        [
+            df[keep_original],
+            pca_df
+        ],
+        axis=1
+    )
+
+    pca_info = {
+
+        "pca_applied": True,
+
+        "original_pca_columns":
+            pca_columns,
+
+        "principal_components":
+            pc_names,
+
+        "original_number_features":
+            len(pca_columns),
+
+        "reduced_number_features":
+            len(pc_names),
+
+        "explained_variance":
+            pca.explained_variance_ratio_,
+
+        "total_explained_variance":
+            pca.explained_variance_ratio_.sum(),
+
+        "scaler":
+            scaler,
+
+        "pca_model":
+            pca
+    }
+
+    return reduced_df, pca_info
+
+
+# ============================================================
+# 2. DETERMINE WHICH COLUMNS MUST NOT BE PCA-TRANSFORMED
+# ============================================================
+
+def get_protected_columns(
+    objective,
+    constraints,
+    price_column
+):
+
+    protected = {price_column}
+
+    # --------------------------------------------------------
+    # Objective columns
+    # --------------------------------------------------------
+
+    if objective["type"] == "sum":
+
+        protected.add(
+            objective["column"]
+        )
+
+    elif objective["type"] == "weighted_sum":
+
+        for item in objective["terms"]:
+
+            protected.add(
+                item["column"]
+            )
+
+    # --------------------------------------------------------
+    # Constraint columns
+    # --------------------------------------------------------
+
+    for constraint in constraints:
+
+        if "column" in constraint:
+
+            protected.add(
+                constraint["column"]
+            )
+
+    return protected
+
+
+# ============================================================
+# 3. MAIN OR OPTIMIZATION SOLVER
+# ============================================================
+
+def optimize_portfolio(
+    dataset,
+    budget,
+    objective,
+    constraints=None,
+    price_column="price",
+    use_pca=True,
+    pca_variance=0.95
+):
+
+    """
+    General binary portfolio-selection MILP.
+
+    ----------------------------------------------------------
+    INPUTS
+    ----------------------------------------------------------
+
+    dataset:
+        pandas DataFrame
+
+    budget:
+        numeric budget
+
+    objective:
+        dictionary describing what should be optimized
+
+    constraints:
+        list of user-defined constraint dictionaries
+
+    price_column:
+        column representing acquisition cost
+
+    use_pca:
+        whether PCA preprocessing should be performed
+
+    ----------------------------------------------------------
+    DECISION VARIABLE
+    ----------------------------------------------------------
+
+    x[i] = 1 if item i is selected
+           0 otherwise
+
+    ----------------------------------------------------------
+    """
+
+    if constraints is None:
+
+        constraints = []
+
+    df_original = dataset.copy().reset_index(drop=True)
+
+    # ========================================================
+    # VALIDATION
+    # ========================================================
+
+    if price_column not in df_original.columns:
+
+        raise ValueError(
+            f"Price column '{price_column}' "
+            "does not exist."
+        )
+
+    if budget <= 0:
+
+        raise ValueError(
+            "Budget must be greater than zero."
+        )
+
+    # ========================================================
+    # FIND PROTECTED VARIABLES
+    # ========================================================
+
+    protected_columns = get_protected_columns(
+        objective=objective,
+        constraints=constraints,
+        price_column=price_column
+    )
+
+    # ========================================================
+    # PCA
+    # ========================================================
+
+    if use_pca:
+
+        reduced_df, pca_info = apply_safe_pca(
+
+            df_original,
+
+            protected_columns=
+                protected_columns,
+
+            variance_to_keep=
+                pca_variance
+        )
+
+    else:
+
+        reduced_df = df_original.copy()
+
+        pca_info = {
+            "pca_applied": False
+        }
+
+    # ========================================================
+    # IMPORTANT
+    #
+    # The MILP uses the original values for variables appearing
+    # in the business problem.
+    #
+    # PCA components remain available as reduced features.
+    # ========================================================
+
+    df = df_original.copy()
+
+    n = len(df)
+
+    # ========================================================
+    # CREATE OR SOLVER
+    # ========================================================
+
+    solver = pywraplp.Solver.CreateSolver(
+        "SCIP"
+    )
+
+    if solver is None:
+
+        raise RuntimeError(
+            "SCIP solver could not be initialized."
+        )
+
+    # ========================================================
+    # DECISION VARIABLES
+    #
+    # x_i ∈ {0,1}
+    # ========================================================
+
+    x = [
+
+        solver.BoolVar(
+            f"x_{i}"
+        )
+
+        for i in range(n)
+    ]
+
+    total_selected = solver.Sum(x)
+
+    # ========================================================
+    # OBJECTIVE
+    # ========================================================
+
+    objective_type = objective["type"]
+
+    direction = objective.get(
+        "direction",
+        "maximize"
+    )
+
+    # --------------------------------------------------------
+    # Sum of a column
+    #
+    # Example:
+    # maximize total carats
+    # --------------------------------------------------------
+
+    if objective_type == "sum":
+
+        column = objective["column"]
+
+        expression = solver.Sum(
+
+            float(df.loc[i, column])
+            * x[i]
+
+            for i in range(n)
+        )
+
+    # --------------------------------------------------------
+    # Maximize number of selected items
+    # --------------------------------------------------------
+
+    elif objective_type == "count":
+
+        expression = total_selected
+
+    # --------------------------------------------------------
+    # Weighted multi-factor objective
+    #
+    # Example:
+    #
+    # 0.7 * carat
+    # +
+    # 0.3 * another metric
+    # --------------------------------------------------------
+
+    elif objective_type == "weighted_sum":
+
+        terms = objective["terms"]
+
+        expression = solver.Sum(
+
+            float(term["weight"])
+            * float(df.loc[i, term["column"]])
+            * x[i]
+
+            for term in terms
+            for i in range(n)
+        )
+
+    else:
+
+        raise ValueError(
+            f"Unknown objective type: "
+            f"{objective_type}"
+        )
+
+    # --------------------------------------------------------
+    # Direction
+    # --------------------------------------------------------
+
+    if direction == "maximize":
+
+        solver.Maximize(
+            expression
+        )
+
+    elif direction == "minimize":
+
+        solver.Minimize(
+            expression
+        )
+
+    else:
+
+        raise ValueError(
+            "direction must be "
+            "'maximize' or 'minimize'."
+        )
+
+    # ========================================================
+    # BUDGET CONSTRAINT
+    #
+    # Σ price_i x_i <= B
+    # ========================================================
+
+    solver.Add(
+
+        solver.Sum(
+
+            float(df.loc[i, price_column])
+            * x[i]
+
+            for i in range(n)
+
+        )
+
+        <= float(budget)
+    )
+
+    # ========================================================
+    # USER CONSTRAINTS
+    # ========================================================
+
+    for constraint in constraints:
+
+        constraint_type = constraint["type"]
+
+        # ====================================================
+        # TOTAL VALUE MAXIMUM
+        #
+        # Example:
+        # total carats <= 500
+        # ====================================================
+
+        if constraint_type == "sum_max":
+
+            column = constraint["column"]
+
+            value = constraint["value"]
+
+            solver.Add(
+
+                solver.Sum(
+
+                    float(df.loc[i, column])
+                    * x[i]
+
+                    for i in range(n)
+
+                )
+
+                <= value
+            )
+
+        # ====================================================
+        # TOTAL VALUE MINIMUM
+        # ====================================================
+
+        elif constraint_type == "sum_min":
+
+            column = constraint["column"]
+
+            value = constraint["value"]
+
+            solver.Add(
+
+                solver.Sum(
+
+                    float(df.loc[i, column])
+                    * x[i]
+
+                    for i in range(n)
+
+                )
+
+                >= value
+            )
+
+        # ====================================================
+        # MAXIMUM NUMBER OF ITEMS
+        # ====================================================
+
+        elif constraint_type == "max_items":
+
+            solver.Add(
+
+                total_selected
+                <= constraint["value"]
+            )
+
+        # ====================================================
+        # MINIMUM NUMBER OF ITEMS
+        # ====================================================
+
+        elif constraint_type == "min_items":
+
+            solver.Add(
+
+                total_selected
+                >= constraint["value"]
+            )
+
+        # ====================================================
+        # MAXIMUM CATEGORY SHARE
+        #
+        # Example:
+        #
+        # no cut > 25%
+        #
+        # Σ_{i in cut=c} x_i
+        # <=
+        # 0.25 Σ_i x_i
+        # ====================================================
+
+        elif constraint_type == "category_max_share":
+
+            column = constraint["column"]
+
+            max_share = constraint["max_share"]
+
+            categories = (
+                df[column]
+                .dropna()
+                .unique()
+            )
+
+            for category in categories:
+
+                indices = df.index[
+                    df[column] == category
+                ].tolist()
+
+                category_count = solver.Sum(
+
+                    x[i]
+                    for i in indices
+                )
+
+                solver.Add(
+
+                    category_count
+                    <=
+                    max_share
+                    * total_selected
+                )
+
+        # ====================================================
+        # MINIMUM SHARE OF A PARTICULAR CATEGORY
+        #
+        # Example:
+        #
+        # at least 20% Ideal
+        # ====================================================
+
+        elif constraint_type == "category_min_share":
+
+            column = constraint["column"]
+
+            category = constraint["category"]
+
+            minimum_share = constraint[
+                "min_share"
+            ]
+
+            indices = df.index[
+                df[column] == category
+            ].tolist()
+
+            category_count = solver.Sum(
+
+                x[i]
+                for i in indices
+            )
+
+            solver.Add(
+
+                category_count
+                >=
+                minimum_share
+                * total_selected
+            )
+
+        # ====================================================
+        # MAXIMUM SHARE OF SPECIFIC CATEGORY
+        # ====================================================
+
+        elif constraint_type == "specific_category_max_share":
+
+            column = constraint["column"]
+
+            category = constraint["category"]
+
+            maximum_share = constraint[
+                "max_share"
+            ]
+
+            indices = df.index[
+                df[column] == category
+            ].tolist()
+
+            category_count = solver.Sum(
+
+                x[i]
+                for i in indices
+            )
+
+            solver.Add(
+
+                category_count
+                <=
+                maximum_share
+                * total_selected
+            )
+
+        # ====================================================
+        # MINIMUM AVERAGE VALUE
+        #
+        # Example:
+        #
+        # average carat >= 0.8
+        #
+        # Σ carat_i x_i
+        # >=
+        # 0.8 Σ x_i
+        # ====================================================
+
+        elif constraint_type == "average_min":
+
+            column = constraint["column"]
+
+            minimum = constraint["value"]
+
+            solver.Add(
+
+                solver.Sum(
+
+                    float(df.loc[i, column])
+                    * x[i]
+
+                    for i in range(n)
+
+                )
+
+                >=
+
+                minimum
+                * total_selected
+            )
+
+        # ====================================================
+        # MAXIMUM AVERAGE VALUE
+        # ====================================================
+
+        elif constraint_type == "average_max":
+
+            column = constraint["column"]
+
+            maximum = constraint["value"]
+
+            solver.Add(
+
+                solver.Sum(
+
+                    float(df.loc[i, column])
+                    * x[i]
+
+                    for i in range(n)
+
+                )
+
+                <=
+
+                maximum
+                * total_selected
+            )
+
+        else:
+
+            raise ValueError(
+
+                f"Unsupported constraint type: "
+                f"{constraint_type}"
+            )
+
+    # ========================================================
+    # SOLVE MILP
+    # ========================================================
+
+    status = solver.Solve()
+
+    # ========================================================
+    # STATUS
+    # ========================================================
+
+    if status == pywraplp.Solver.OPTIMAL:
+
+        status_name = "OPTIMAL"
+
+    elif status == pywraplp.Solver.FEASIBLE:
+
+        status_name = "FEASIBLE"
+
+    elif status == pywraplp.Solver.INFEASIBLE:
+
+        return {
+
+            "status":
+                "INFEASIBLE",
+
+            "message":
+                "No portfolio satisfies all "
+                "user constraints.",
+
+            "pca_info":
+                pca_info,
+
+            "reduced_dataset":
+                reduced_df
+        }
+
+    elif status == pywraplp.Solver.UNBOUNDED:
+
+        return {
+
+            "status":
+                "UNBOUNDED",
+
+            "pca_info":
+                pca_info
+        }
+
+    else:
+
+        return {
+
+            "status":
+                "NOT_SOLVED",
+
+            "pca_info":
+                pca_info
+        }
+
+    # ========================================================
+    # EXTRACT OPTIMAL PORTFOLIO
+    # ========================================================
+
+    selected_indices = [
+
+        i
+
+        for i in range(n)
+
+        if x[i].solution_value()
+        > 0.5
+    ]
+
+    selected = (
+
+        df.iloc[selected_indices]
+        .copy()
+        .reset_index(drop=True)
+    )
+
+    # ========================================================
+    # BUSINESS RESULTS
+    # ========================================================
+
+    total_cost = (
+
+        selected[price_column].sum()
+        if len(selected) > 0
+        else 0
+    )
+
+    unused_budget = (
+        budget - total_cost
+    )
+
+    # ========================================================
+    # RETURN RESULTS
+    # ========================================================
+
+    return {
+
+        "status":
+            status_name,
+
+        "objective_value":
+            solver.Objective().Value(),
+
+        "budget":
+            budget,
+
+        "total_cost":
+            total_cost,
+
+        "unused_budget":
+            unused_budget,
+
+        "number_selected":
+            len(selected),
+
+        "selected_indices":
+            selected_indices,
+
+        "selected_items":
+            selected,
+
+        "pca_info":
+            pca_info,
+
+        "reduced_dataset":
+            reduced_df
+    }

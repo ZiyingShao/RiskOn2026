@@ -1,0 +1,13 @@
+Your JSON failed checkpoint 'meaning'. Fix ONLY these problems and output the full corrected JSON:
+- [UNKNOWN_PARAM] at objective.expr.terms[0]: undefined parameter 'carat' -> declare 'carat' in `params` or bind it to a column
+- [SCALAR_VAR] at objective.expr.terms[0]: variables must be summed over an index set -> add an `over` clause
+- [UNKNOWN_PARAM] at constraints.budget.lhs.terms[0]: undefined parameter 'price' -> declare 'price' in `params` or bind it to a column
+- [SCALAR_VAR] at constraints.budget.lhs.terms[0]: variables must be summed over an index set -> add an `over` clause
+- [SCALAR_VAR] at constraints.display_slots.lhs.terms[0]: variables must be summed over an index set -> add an `over` clause
+- [UNKNOWN_PARAM] at constraints.volume.lhs.terms[0]: undefined parameter 'volume' -> declare 'volume' in `params` or bind it to a column
+- [SCALAR_VAR] at constraints.volume.lhs.terms[0]: variables must be summed over an index set -> add an `over` clause
+- [SCALAR_VAR] at constraints.cut_grade_limit_30pct.lhs.terms[1]: variables must be summed over an index set -> add an `over` clause
+- [EMPTY_EXPR] at constraints.cut_grade_limit_30pct.rhs: expression has no terms and no constant
+- [UNKNOWN_PARAM] at constraints.capital_high_price.lhs.terms[0]: undefined parameter 'price' -> declare 'price' in `params` or bind it to a column
+- [UNKNOWN_PARAM] at constraints.capital_high_price.lhs.terms[1]: undefined parameter 'price' -> declare 'price' in `params` or bind it to a column
+- [SCALAR_VAR] at constraints.capital_high_price.lhs.terms[1]: variables must be summed over an index set -> add an `over` clause

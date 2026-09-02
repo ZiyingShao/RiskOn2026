@@ -1,0 +1,47 @@
+[
+ {
+  "brief": "base",
+  "run": "r2",
+  "attempt": 2,
+  "prompt": "prompts/base.md",
+  "prev": "results/attempts/base_r2_a1.json",
+  "errors": "results/attempts/base_r2_a1.errors.txt",
+  "out": "results/attempts/base_r2_a2.json"
+ },
+ {
+  "brief": "base",
+  "run": "r3",
+  "attempt": 2,
+  "prompt": "prompts/base.md",
+  "prev": "results/attempts/base_r3_a1.json",
+  "errors": "results/attempts/base_r3_a1.errors.txt",
+  "out": "results/attempts/base_r3_a2.json"
+ },
+ {
+  "brief": "contradiction",
+  "run": "r2",
+  "attempt": 2,
+  "prompt": "prompts/contradiction.md",
+  "prev": "results/attempts/contradiction_r2_a1.json",
+  "errors": "results/attempts/contradiction_r2_a1.errors.txt",
+  "out": "results/attempts/contradiction_r2_a2.json"
+ },
+ {
+  "brief": "contradiction",
+  "run": "r4",
+  "attempt": 2,
+  "prompt": "prompts/contradiction.md",
+  "prev": "results/attempts/contradiction_r4_a1.json",
+  "errors": "results/attempts/contradiction_r4_a1.errors.txt",
+  "out": "results/attempts/contradiction_r4_a2.json"
+ },
+ {
+  "brief": "infeasible",
+  "run": "r3",
+  "attempt": 2,
+  "prompt": "prompts/infeasible.md",
+  "prev": "results/attempts/infeasible_r3_a1.json",
+  "errors": "results/attempts/infeasible_r3_a1.errors.txt",
+  "out": "results/attempts/infeasible_r3_a2.json"
+ }
+]

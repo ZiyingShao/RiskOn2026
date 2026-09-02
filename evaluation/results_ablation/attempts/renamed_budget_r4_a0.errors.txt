@@ -1,0 +1,6 @@
+Your JSON failed checkpoint 'meaning'. Fix ONLY these problems and output the full corrected JSON:
+- [UNKNOWN_PARAM] at objective.expr.terms[0]: undefined parameter 'carat' -> declare 'carat' in `params` or bind it to a column
+- [UNKNOWN_PARAM] at constraints.budget_constraint.lhs.terms[0]: undefined parameter 'price' -> declare 'price' in `params` or bind it to a column
+- [UNKNOWN_PARAM] at constraints.volume_limit.lhs.terms[0]: undefined parameter 'volume' -> declare 'volume' in `params` or bind it to a column
+- [UNKNOWN_PARAM] at constraints.high_price_capital_limit.lhs.terms[0]: undefined parameter 'price' -> declare 'price' in `params` or bind it to a column
+- [UNKNOWN_PARAM] at constraints.high_price_capital_limit.rhs.terms[0]: undefined parameter 'price' -> declare 'price' in `params` or bind it to a column

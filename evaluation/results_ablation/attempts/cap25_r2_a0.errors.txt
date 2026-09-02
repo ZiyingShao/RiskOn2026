@@ -1,0 +1,8 @@
+Your JSON failed checkpoint 'meaning'. Fix ONLY these problems and output the full corrected JSON:
+- [SCALAR_VAR] at objective.expr.terms[0]: variables must be summed over an index set -> add an `over` clause
+- [SCALAR_VAR] at constraints.budget.lhs.terms[0]: variables must be summed over an index set -> add an `over` clause
+- [SCALAR_VAR] at constraints.max_stones.lhs.terms[0]: variables must be summed over an index set -> add an `over` clause
+- [UNKNOWN_PARAM] at constraints.max_volume.lhs.terms[0]: undefined parameter 'x_dim * y_dim * z_dim' -> declare 'x_dim * y_dim * z_dim' in `params` or bind it to a column
+- [SCALAR_VAR] at constraints.max_volume.lhs.terms[0]: variables must be summed over an index set -> add an `over` clause
+- [SCALAR_VAR] at constraints.cut_diversity.rhs.terms[0]: variables must be summed over an index set -> add an `over` clause
+- [SCALAR_VAR] at constraints.capital_limit_high_price.rhs.terms[0]: variables must be summed over an index set -> add an `over` clause

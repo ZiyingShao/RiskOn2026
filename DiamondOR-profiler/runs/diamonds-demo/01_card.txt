@@ -1,0 +1,14 @@
+DATASET: inventory (9,989 usable rows; 1 row = 1 item)
+Excluded during cleaning: 3 zero dimension rows, 8 duplicate rows
+
+carat   [objective]  numeric  min 0.2 | median 0.7 | p90 1.51 | max 4.13
+price   [cost]       numeric  min 326 | median 2,396 | p90 9,788 | max 18,787
+cut     [constraint] categorical (5, ordered best->worst)  Ideal 0.395 | Premium 0.259 | Very Good 0.226 | Good 0.091 | Fair 0.029
+color   [constraint] categorical (7, ordered best->worst)  D 0.122 | E 0.181 | F 0.167 | G 0.221 | H 0.155 | I 0.101 | J 0.054
+clarity [constraint] categorical (8, ordered best->worst)  IF 0.032 | VVS1 0.067 | VVS2 0.091 | VS1 0.156 | VS2 0.228 | SI1 0.242 | SI2 0.172 | I1 0.012
+
+RISK TIERS (clarity): low={IF,VVS1,VVS2} 0.190 | medium={VS1,VS2} 0.384 | elevated={SI1,SI2} 0.414 | high={I1} 0.012
+
+NOTES
+- Ideal cut is 39.5% of pool: any per-level cap <= 30% is structurally binding.
+- 'elevated' risk tier is 41.4% of pool: the suggested 35% cap will bind.

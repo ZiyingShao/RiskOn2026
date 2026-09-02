@@ -1,0 +1,478 @@
+{
+ "base_r0": {
+  "brief": "base",
+  "attempts": [
+   {
+    "stage": "valid",
+    "codes": []
+   }
+  ],
+  "status": "converged",
+  "final_spec": "base_r0_a0.json"
+ },
+ "base_r1": {
+  "brief": "base",
+  "attempts": [
+   {
+    "stage": "valid",
+    "codes": []
+   }
+  ],
+  "status": "converged",
+  "final_spec": "base_r1_a0.json"
+ },
+ "base_r2": {
+  "brief": "base",
+  "attempts": [
+   {
+    "stage": "meaning",
+    "codes": [
+     "EMPTY_EXPR"
+    ]
+   },
+   {
+    "stage": "meaning",
+    "codes": [
+     "EMPTY_EXPR"
+    ]
+   }
+  ],
+  "status": "pending_repair"
+ },
+ "base_r3": {
+  "brief": "base",
+  "attempts": [
+   {
+    "stage": "meaning",
+    "codes": [
+     "EMPTY_EXPR",
+     "SCALAR_VAR"
+    ]
+   },
+   {
+    "stage": "meaning",
+    "codes": [
+     "EMPTY_EXPR"
+    ]
+   }
+  ],
+  "status": "pending_repair"
+ },
+ "base_r4": {
+  "brief": "base",
+  "attempts": [
+   {
+    "stage": "valid",
+    "codes": []
+   }
+  ],
+  "status": "converged",
+  "final_spec": "base_r4_a0.json"
+ },
+ "cap25_r0": {
+  "brief": "cap25",
+  "attempts": [
+   {
+    "stage": "valid",
+    "codes": []
+   }
+  ],
+  "status": "converged",
+  "final_spec": "cap25_r0_a0.json"
+ },
+ "cap25_r1": {
+  "brief": "cap25",
+  "attempts": [
+   {
+    "stage": "valid",
+    "codes": []
+   }
+  ],
+  "status": "converged",
+  "final_spec": "cap25_r1_a0.json"
+ },
+ "cap25_r2": {
+  "brief": "cap25",
+  "attempts": [
+   {
+    "stage": "meaning",
+    "codes": [
+     "SCALAR_VAR",
+     "UNKNOWN_PARAM"
+    ]
+   },
+   {
+    "stage": "valid",
+    "codes": []
+   }
+  ],
+  "status": "converged",
+  "final_spec": "cap25_r2_a1.json"
+ },
+ "cap25_r3": {
+  "brief": "cap25",
+  "attempts": [
+   {
+    "stage": "valid",
+    "codes": []
+   }
+  ],
+  "status": "converged",
+  "final_spec": "cap25_r3_a0.json"
+ },
+ "cap25_r4": {
+  "brief": "cap25",
+  "attempts": [
+   {
+    "stage": "valid",
+    "codes": []
+   }
+  ],
+  "status": "converged",
+  "final_spec": "cap25_r4_a0.json"
+ },
+ "contradiction_r0": {
+  "brief": "contradiction",
+  "attempts": [
+   {
+    "stage": "valid",
+    "codes": []
+   }
+  ],
+  "status": "converged",
+  "final_spec": "contradiction_r0_a0.json"
+ },
+ "contradiction_r1": {
+  "brief": "contradiction",
+  "attempts": [
+   {
+    "stage": "valid",
+    "codes": []
+   }
+  ],
+  "status": "converged",
+  "final_spec": "contradiction_r1_a0.json"
+ },
+ "contradiction_r2": {
+  "brief": "contradiction",
+  "attempts": [
+   {
+    "stage": "meaning",
+    "codes": [
+     "EMPTY_EXPR",
+     "SCALAR_VAR",
+     "UNKNOWN_PARAM"
+    ]
+   },
+   {
+    "stage": "meaning",
+    "codes": [
+     "EMPTY_EXPR"
+    ]
+   }
+  ],
+  "status": "pending_repair"
+ },
+ "contradiction_r3": {
+  "brief": "contradiction",
+  "attempts": [
+   {
+    "stage": "meaning",
+    "codes": [
+     "UNKNOWN_PARAM"
+    ]
+   },
+   {
+    "stage": "valid",
+    "codes": []
+   }
+  ],
+  "status": "converged",
+  "final_spec": "contradiction_r3_a1.json"
+ },
+ "contradiction_r4": {
+  "brief": "contradiction",
+  "attempts": [
+   {
+    "stage": "meaning",
+    "codes": [
+     "EMPTY_EXPR",
+     "UNKNOWN_PARAM"
+    ]
+   },
+   {
+    "stage": "meaning",
+    "codes": [
+     "EMPTY_EXPR"
+    ]
+   }
+  ],
+  "status": "pending_repair"
+ },
+ "infeasible_r0": {
+  "brief": "infeasible",
+  "attempts": [
+   {
+    "stage": "meaning",
+    "codes": [
+     "SCALAR_VAR",
+     "UNKNOWN_PARAM"
+    ]
+   },
+   {
+    "stage": "valid",
+    "codes": []
+   }
+  ],
+  "status": "converged",
+  "final_spec": "infeasible_r0_a1.json"
+ },
+ "infeasible_r1": {
+  "brief": "infeasible",
+  "attempts": [
+   {
+    "stage": "valid",
+    "codes": []
+   }
+  ],
+  "status": "converged",
+  "final_spec": "infeasible_r1_a0.json"
+ },
+ "infeasible_r2": {
+  "brief": "infeasible",
+  "attempts": [
+   {
+    "stage": "valid",
+    "codes": []
+   }
+  ],
+  "status": "converged",
+  "final_spec": "infeasible_r2_a0.json"
+ },
+ "infeasible_r3": {
+  "brief": "infeasible",
+  "attempts": [
+   {
+    "stage": "meaning",
+    "codes": [
+     "SCALAR_VAR",
+     "UNKNOWN_PARAM"
+    ]
+   },
+   {
+    "stage": "meaning",
+    "codes": [
+     "UNKNOWN_PARAM"
+    ]
+   }
+  ],
+  "status": "pending_repair"
+ },
+ "infeasible_r4": {
+  "brief": "infeasible",
+  "attempts": [
+   {
+    "stage": "valid",
+    "codes": []
+   }
+  ],
+  "status": "converged",
+  "final_spec": "infeasible_r4_a0.json"
+ },
+ "no_volume_r0": {
+  "brief": "no_volume",
+  "attempts": [
+   {
+    "stage": "meaning",
+    "codes": [
+     "EMPTY_EXPR"
+    ]
+   },
+   {
+    "stage": "valid",
+    "codes": []
+   }
+  ],
+  "status": "converged",
+  "final_spec": "no_volume_r0_a1.json"
+ },
+ "no_volume_r1": {
+  "brief": "no_volume",
+  "attempts": [
+   {
+    "stage": "valid",
+    "codes": []
+   }
+  ],
+  "status": "converged",
+  "final_spec": "no_volume_r1_a0.json"
+ },
+ "no_volume_r2": {
+  "brief": "no_volume",
+  "attempts": [
+   {
+    "stage": "valid",
+    "codes": []
+   }
+  ],
+  "status": "converged",
+  "final_spec": "no_volume_r2_a0.json"
+ },
+ "no_volume_r3": {
+  "brief": "no_volume",
+  "attempts": [
+   {
+    "stage": "valid",
+    "codes": []
+   }
+  ],
+  "status": "converged",
+  "final_spec": "no_volume_r3_a0.json"
+ },
+ "no_volume_r4": {
+  "brief": "no_volume",
+  "attempts": [
+   {
+    "stage": "valid",
+    "codes": []
+   }
+  ],
+  "status": "converged",
+  "final_spec": "no_volume_r4_a0.json"
+ },
+ "renamed_budget_r0": {
+  "brief": "renamed_budget",
+  "attempts": [
+   {
+    "stage": "valid",
+    "codes": []
+   }
+  ],
+  "status": "converged",
+  "final_spec": "renamed_budget_r0_a0.json"
+ },
+ "renamed_budget_r1": {
+  "brief": "renamed_budget",
+  "attempts": [
+   {
+    "stage": "valid",
+    "codes": []
+   }
+  ],
+  "status": "converged",
+  "final_spec": "renamed_budget_r1_a0.json"
+ },
+ "renamed_budget_r2": {
+  "brief": "renamed_budget",
+  "attempts": [
+   {
+    "stage": "valid",
+    "codes": []
+   }
+  ],
+  "status": "converged",
+  "final_spec": "renamed_budget_r2_a0.json"
+ },
+ "renamed_budget_r3": {
+  "brief": "renamed_budget",
+  "attempts": [
+   {
+    "stage": "valid",
+    "codes": []
+   }
+  ],
+  "status": "converged",
+  "final_spec": "renamed_budget_r3_a0.json"
+ },
+ "renamed_budget_r4": {
+  "brief": "renamed_budget",
+  "attempts": [
+   {
+    "stage": "meaning",
+    "codes": [
+     "UNKNOWN_PARAM"
+    ]
+   },
+   {
+    "stage": "valid",
+    "codes": []
+   }
+  ],
+  "status": "converged",
+  "final_spec": "renamed_budget_r4_a1.json"
+ },
+ "small_stones_r0": {
+  "brief": "small_stones",
+  "attempts": [
+   {
+    "stage": "meaning",
+    "codes": [
+     "UNKNOWN_PARAM"
+    ]
+   },
+   {
+    "stage": "valid",
+    "codes": []
+   }
+  ],
+  "status": "converged",
+  "final_spec": "small_stones_r0_a1.json"
+ },
+ "small_stones_r1": {
+  "brief": "small_stones",
+  "attempts": [
+   {
+    "stage": "meaning",
+    "codes": [
+     "UNBOUND_INDEX",
+     "UNKNOWN_PARAM"
+    ]
+   },
+   {
+    "stage": "valid",
+    "codes": []
+   }
+  ],
+  "status": "converged",
+  "final_spec": "small_stones_r1_a1.json"
+ },
+ "small_stones_r2": {
+  "brief": "small_stones",
+  "attempts": [
+   {
+    "stage": "valid",
+    "codes": []
+   }
+  ],
+  "status": "converged",
+  "final_spec": "small_stones_r2_a0.json"
+ },
+ "small_stones_r3": {
+  "brief": "small_stones",
+  "attempts": [
+   {
+    "stage": "meaning",
+    "codes": [
+     "SCALAR_VAR"
+    ]
+   },
+   {
+    "stage": "valid",
+    "codes": []
+   }
+  ],
+  "status": "converged",
+  "final_spec": "small_stones_r3_a1.json"
+ },
+ "small_stones_r4": {
+  "brief": "small_stones",
+  "attempts": [
+   {
+    "stage": "valid",
+    "codes": []
+   }
+  ],
+  "status": "converged",
+  "final_spec": "small_stones_r4_a0.json"
+ }
+}

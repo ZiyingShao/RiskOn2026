@@ -1,0 +1,3 @@
+Your JSON failed checkpoint 'meaning'. Fix ONLY these problems and output the full corrected JSON:
+- [EMPTY_EXPR] at constraints.max_per_cut.rhs: expression has no terms and no constant
+- [EMPTY_EXPR] at constraints.max_high_price_share.rhs: expression has no terms and no constant

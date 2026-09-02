@@ -1,0 +1,304 @@
+{
+ "name": "jeweler_vault_stocking",
+ "tables": [
+  {
+   "name": "inv",
+   "path": "diamonds.csv",
+   "sample": {
+    "n": 800,
+    "seed": 7
+   },
+   "derived": [
+    {
+     "name": "volume",
+     "expr": "x * y * z"
+    }
+   ]
+  }
+ ],
+ "sets": [
+  {
+   "name": "rows",
+   "kind": "rows",
+   "table": "inv"
+  },
+  {
+   "name": "cut_grades",
+   "kind": "categories",
+   "table": "inv",
+   "column": "cut"
+  },
+  {
+   "name": "clarity_grades",
+   "kind": "categories",
+   "table": "inv",
+   "column": "clarity"
+  }
+ ],
+ "params": [
+  {
+   "name": "price",
+   "index": [
+    "rows"
+   ],
+   "table": "inv",
+   "column": "price"
+  },
+  {
+   "name": "carat",
+   "index": [
+    "rows"
+   ],
+   "table": "inv",
+   "column": "carat"
+  },
+  {
+   "name": "volume",
+   "index": [
+    "rows"
+   ],
+   "table": "inv",
+   "column": "volume"
+  }
+ ],
+ "vars": [
+  {
+   "name": "x",
+   "index": [
+    "rows"
+   ],
+   "domain": "Binary"
+  }
+ ],
+ "objective": {
+  "sense": "max",
+  "expr": {
+   "terms": [
+    {
+     "weight": "carat",
+     "var": "x",
+     "over": {
+      "set": "rows"
+     }
+    }
+   ],
+   "const": 0
+  },
+  "source_text": "The goal is to maximise the total carat mass held in the vault."
+ },
+ "constraints": [
+  {
+   "name": "credit_limit",
+   "forall": [],
+   "lhs": {
+    "terms": [
+     {
+      "weight": "price",
+      "var": "x",
+      "over": {
+       "set": "rows"
+      }
+     }
+    ],
+    "const": 0
+   },
+   "rel": "<=",
+   "rhs": {
+    "terms": [],
+    "const": 250000
+   },
+   "source_text": "Deploy a fixed line of credit of CHF 250,000: the total wholesale price of the stones bought must not exceed it."
+  },
+  {
+   "name": "display_slots",
+   "forall": [],
+   "lhs": {
+    "terms": [
+     {
+      "coef": 1,
+      "var": "x",
+      "over": {
+       "set": "rows"
+      }
+     }
+    ],
+    "const": 0
+   },
+   "rel": "<=",
+   "rhs": {
+    "terms": [],
+    "const": 60
+   },
+   "source_text": "The retail vault has 60 individual display slots, so at most 60 stones can be held."
+  },
+  {
+   "name": "volume_limit",
+   "forall": [],
+   "lhs": {
+    "terms": [
+     {
+      "weight": "volume",
+      "var": "x",
+      "over": {
+       "set": "rows"
+      }
+     }
+    ],
+    "const": 0
+   },
+   "rel": "<=",
+   "rhs": {
+    "terms": [],
+    "const": 9000
+   },
+   "source_text": "Total displayed stone volume cannot exceed 9,000 cubic millimetres; a stone's volume is x times y times z."
+  },
+  {
+   "name": "cut_limit_30pct",
+   "forall": [
+    "cut_grades"
+   ],
+   "lhs": {
+    "terms": [
+     {
+      "coef": 1,
+      "var": "x",
+      "over": {
+       "set": "rows",
+       "where": [
+        {
+         "column": "cut",
+         "op": "eq",
+         "value": "$cut_grades"
+        }
+       ]
+      }
+     }
+    ],
+    "const": 0
+   },
+   "rel": "<=",
+   "rhs": {
+    "terms": [
+     {
+      "coef": 0.3,
+      "var": "x",
+      "over": {
+       "set": "rows"
+      }
+     }
+    ],
+    "const": 0
+   },
+   "source_text": "No single cut grade may exceed 30% of the stones held."
+  },
+  {
+   "name": "clarity_minimum",
+   "forall": [
+    "clarity_grades"
+   ],
+   "lhs": {
+    "terms": [
+     {
+      "coef": 1,
+      "var": "x",
+      "over": {
+       "set": "rows",
+       "where": [
+        {
+         "column": "clarity",
+         "op": "eq",
+         "value": "$clarity_grades"
+        }
+       ]
+      }
+     }
+    ],
+    "const": 0
+   },
+   "rel": ">=",
+   "rhs": {
+    "terms": [],
+    "const": 2
+   },
+   "source_text": "Carry at least two stones of every clarity grade so the range stays saleable."
+  },
+  {
+   "name": "high_price_capital_limit",
+   "forall": [],
+   "lhs": {
+    "terms": [
+     {
+      "weight": "price",
+      "var": "x",
+      "over": {
+       "set": "rows",
+       "where": [
+        {
+         "column": "price",
+         "op": "gt",
+         "value": 8000
+        }
+       ]
+      }
+     }
+    ],
+    "const": 0
+   },
+   "rel": "<=",
+   "rhs": {
+    "terms": [
+     {
+      "coef": 0.4,
+      "weight": "price",
+      "var": "x",
+      "over": {
+       "set": "rows"
+      }
+     }
+    ],
+    "const": 0
+   },
+   "source_text": "At most 40% of deployed capital may sit in stones priced above CHF 8,000."
+  },
+  {
+   "name": "cut_limit_20pct",
+   "forall": [
+    "cut_grades"
+   ],
+   "lhs": {
+    "terms": [
+     {
+      "coef": 1,
+      "var": "x",
+      "over": {
+       "set": "rows",
+       "where": [
+        {
+         "column": "cut",
+         "op": "eq",
+         "value": "$cut_grades"
+        }
+       ]
+      }
+     }
+    ],
+    "const": 0
+   },
+   "rel": "<=",
+   "rhs": {
+    "terms": [
+     {
+      "coef": 0.2,
+      "var": "x",
+      "over": {
+       "set": "rows"
+      }
+     }
+    ],
+    "const": 0
+   },
+   "source_text": "Because the buyer dislikes concentration, keep every cut grade to at most 20% of the stones held."
+  }
+ ]
+}
