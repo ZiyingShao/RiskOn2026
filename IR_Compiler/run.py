@@ -18,9 +18,10 @@ from pydantic import ValidationError
 from ir import ModelSpec
 from validate import IRError, BindError, validate, check_bound
 from compiler import bind, compile_model, solve, diagnose_infeasible
+from scenarios import describe, route
 
 spec_path = sys.argv[1] if len(sys.argv) > 1 else "vault_stocking.json"
-solver = sys.argv[2] if len(sys.argv) > 2 else "appsi_highs"   # e.g. cbc, glpk, gurobi
+forced_solver = sys.argv[2] if len(sys.argv) > 2 else None      # e.g. cbc, glpk, gurobi
 
 
 def fail(checkpoint: str, errs: list[IRError]) -> None:
@@ -47,11 +48,30 @@ except BindError as be:                                          # data contradi
 
 if errs := check_bound(bm):                                      # checkpoint 3: data
     fail("3 (data)", errs)
-print(f"bound: |I|={len(bm.sets['I'])}, "
-      + ", ".join(f"|{k}|={len(v)}" for k, v in bm.sets.items() if k != "I"))
+print("bound: " + ", ".join(f"|{k}|={len(v)}" for k, v in bm.sets.items()))
+
+# scenario detection -> backend choice, from the model's structure
+print()
+print(describe(spec, forced_solver))
+solver = route(spec, forced_solver)["solver"]
+if solver == "cp_sat":
+    # detected as CP-SAT's home turf, but this compiler emits Pyomo; be explicit
+    # rather than silently pretending the route was taken.
+    print("    note: cp_sat backend is not wired into this compiler yet — "
+          "solving the time-indexed MILP with appsi_highs instead")
+    solver = "appsi_highs"
+print()
 
 m = compile_model(bm)
 rep = solve(m, solver=solver)
+
+if rep["status"] in ("unbounded", "infeasibleOrUnbounded"):
+    # opposite pathology to infeasible: too FEW constraints, not too many.
+    # The elastic diagnosis has nothing to say about it.
+    print(f"\nstatus={rep['status']} — the model is unbounded: the objective can grow "
+          "without limit.\nA constraint the brief implies is missing entirely, or a "
+          "variable needs a bound.")
+    sys.exit(0)
 
 if rep["objective"] is None:
     d = diagnose_infeasible(bm, solver=solver)
@@ -60,16 +80,31 @@ if rep["objective"] is None:
         print(f"  relax by {v['relax_by']:>10.2f}: {v['source_text']}")
     sys.exit(0)
 
-print(f"\nstatus={rep['status']}  objective={rep['objective']:.3f} carats  "
-      f"stones={len(rep['selected'])}")
-df = bm.frames["inv"]
-sel = df.loc[rep["selected"]]
-print(f"capital deployed CHF {sel.price.sum():,.0f} | volume {sel.vol_mm3.sum():,.0f} mm3 | "
-      f"mean CHF/ct {sel.price.sum()/sel.carat.sum():,.0f}")
-print("\ncut mix:", (sel.cut.value_counts(normalize=True).round(3)).to_dict())
-print("clarity counts:", sel.clarity.value_counts().to_dict())
+print(f"\nstatus={rep['status']}  objective={rep['objective']:.3f}")
+for vname, picked in rep["selected_by_var"].items():
+    print(f"  {vname}: {len(picked)} of "
+          f"{len(getattr(m, vname))} decision(s) set")
+
+# Scenario-agnostic summary: for each variable whose FIRST index is a rows set,
+# total the columns the model actually reads (its indexed params).
+rowsets = {s.name: s for s in spec.sets if s.kind == "rows"}
+for v in spec.vars:
+    if not v.index or v.index[0] not in rowsets:
+        continue
+    picked = rep["selected_by_var"].get(v.name, [])
+    ids = sorted({(p[0] if isinstance(p, tuple) else p) for p in picked})
+    if not ids:
+        continue
+    df = bm.frames[rowsets[v.index[0]].table]
+    cols = [p.column for p in spec.params
+            if p.index and p.index[0] == v.index[0] and p.column in df.columns]
+    if cols:
+        tot = df.loc[ids, cols].sum()
+        print("  totals over selected rows: "
+              + " | ".join(f"{c} {tot[c]:,.2f}" for c in cols))
+
 print(f"\nconstraint report  (shadow prices: {rep.get('shadow_price_basis', 'off')}, "
-      "carats per unit of rhs)")
+      "objective units per unit of rhs)")
 for c in rep["constraints"]:
     flag = "BINDING" if c["binding"] else f"slack {c['slack']:>10.3f}"
     sp = c.get("shadow_price")

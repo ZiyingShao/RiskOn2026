@@ -41,20 +41,32 @@ class TableSpec(Base):
     sample: Optional[dict[str, int]] = Field(
         default=None, description="{'n': 800, 'seed': 7} — reservoir for demo-scale models"
     )
+    filter: list["Predicate"] = Field(
+        default=[], description="row filter applied at LOAD time — this is how you take "
+                                "'an operational time slice' out of a log")
+    parse_datetime: list[str] = Field(
+        default=[], description="timestamp columns to parse; each yields a numeric "
+                                "'<col>_min' column, minutes from the earliest row. "
+                                "Scheduling needs numbers, not strings.")
     derived: list[Derived] = []
 
 
 # ---------------------------------------------------------------- sets & filters
 
 class SetDef(Base):
-    """Two kinds of index set:
-      - 'rows'      : one member per row of a table (the candidate assets)
-      - 'categories': the distinct levels of a categorical column (cut, clarity, color)
+    """Three kinds of index set:
+      - 'rows'      : one member per row of a table (candidate assets, pending tasks)
+      - 'categories': the distinct levels of a categorical column (cut, clarity, zone)
+      - 'literal'   : members given outright, with NO table behind them — the driver
+                      pool, the time slots of a shift, machines on a line. Assignment
+                      and scheduling models need a second axis that the data does not
+                      contain; this is it.
     """
     name: str
-    kind: Literal["rows", "categories"]
-    table: str
-    column: Optional[str] = None  # required iff kind == 'categories'
+    kind: Literal["rows", "categories", "literal"]
+    table: Optional[str] = None                 # required for rows/categories
+    column: Optional[str] = None                # required iff kind == 'categories'
+    members: list[Union[str, int, float]] = []  # required iff kind == 'literal'
 
 
 class Predicate(Base):
@@ -66,9 +78,16 @@ class Predicate(Base):
 
 
 class IndexRef(Base):
-    """Which rows a term sums over."""
+    """One axis of a summation.
+
+    `bind` pins this axis to a value carried by the constraint's `forall` instead
+    of summing over it — that is how "for each driver d, over that driver's own
+    assignments" is written: over=[{set: I, where: ...}, {set: D, bind: "$D"}].
+    """
     set: str
-    where: list[Predicate] = []  # conjunction
+    where: list[Predicate] = []  # conjunction; row sets only
+    bind: Optional[str] = Field(
+        default=None, description="'$SETNAME' from `forall` — fix this axis instead of summing")
 
 
 # ---------------------------------------------------------------- expressions
@@ -77,7 +96,9 @@ class Term(Base):
     coef: float = 1.0
     var: Optional[str] = None          # None => data-only term (a constant, computed at bind time)
     weight: Optional[str] = None       # param name; None => weight 1
-    over: Optional[IndexRef] = None    # None => scalar var / scalar param
+    # One IndexRef = 1-D (selection models). A LIST = one entry per variable
+    # dimension, in declaration order (assignment/scheduling models).
+    over: Optional[Union[IndexRef, list[IndexRef]]] = None
 
 
 class LinExpr(Base):

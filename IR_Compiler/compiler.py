@@ -17,11 +17,13 @@ Imports run one way — ir.py <- validate.py <- compiler.py — never back.
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
+import itertools
 import pandas as pd
 import pyomo.environ as pyo
 
 from ir import ModelSpec, LinExpr
-from validate import IRError, BindError, forall_tuples, select_rows
+from validate import (IRError, BindError, forall_tuples, select_members, dims,
+                      _OPS)
 
 # ---------------------------------------------------------------- binding
 
@@ -47,6 +49,38 @@ def bind(spec: ModelSpec, root: str = ".") -> BoundModel:
             errs.append(IRError("BAD_TABLE_PATH", f"tables.{t.name}.path", str(ex),
                                 "fix the path/URL, or drop the table"))
             continue
+        # load -> slice -> parse -> sample -> derive.  The slice comes first so
+        # "an operational time slice" means a slice of the log, not of a sample.
+        for pr in t.filter:
+            try:
+                df = df[_OPS[pr.op](df[pr.column], pr.value)]
+            except KeyError:
+                errs.append(IRError("UNKNOWN_COLUMN", f"tables.{t.name}.filter",
+                                    f"no column '{pr.column}'",
+                                    f"use one of {list(df.columns)}"))
+        if df.empty and not errs:
+            errs.append(IRError("EMPTY_TABLE", f"tables.{t.name}.filter",
+                                "the load-time filter selected no rows",
+                                "widen the slice"))
+        parsed: dict[str, pd.Series] = {}
+        for col in t.parse_datetime:
+            if col not in df.columns:
+                errs.append(IRError("UNKNOWN_COLUMN", f"tables.{t.name}.parse_datetime",
+                                    f"no column '{col}'", f"use one of {list(df.columns)}"))
+                continue
+            ts = pd.to_datetime(df[col], errors="coerce")
+            if ts.isna().all():
+                errs.append(IRError("BAD_DATETIME", f"tables.{t.name}.parse_datetime",
+                                    f"column '{col}' does not parse as a timestamp", ""))
+                continue
+            parsed[col] = ts
+        if parsed:
+            # ONE origin for every parsed column in the table. Normalising each
+            # column against its own minimum puts them on different timelines,
+            # which silently makes dropoff_min < pickup_min for early rows.
+            origin = min(s.min() for s in parsed.values())
+            for col, ts in parsed.items():
+                df[f"{col}_min"] = (ts - origin).dt.total_seconds() / 60.0
         if t.sample:
             df = df.sample(n=min(t.sample["n"], len(df)), random_state=t.sample.get("seed", 0))
         df = df.reset_index(drop=True)
@@ -62,6 +96,9 @@ def bind(spec: ModelSpec, root: str = ".") -> BoundModel:
 
     sets: dict[str, list] = {}
     for s in spec.sets:
+        if s.kind == "literal":
+            sets[s.name] = list(s.members)
+            continue
         df = frames[s.table]
         if s.kind == "rows":
             sets[s.name] = list(df.index)
@@ -91,25 +128,46 @@ def bind(spec: ModelSpec, root: str = ".") -> BoundModel:
 # ---------------------------------------------------------------- compilation
 
 
+def _weight_lookup(bm: BoundModel, wname: str | None, axis_sets: list[str]):
+    """f(combo) -> weight. A param indexed by a SUBSET of the term's axes is keyed
+    on just those axes: revenue[task] weighting y[task, driver] keys on task."""
+    if wname is None:
+        return lambda combo: 1.0
+    w = bm.params[wname]
+    pdef = next(p for p in bm.spec.params if p.name == wname)
+    if not pdef.index:
+        return lambda combo: float(w)
+    pos = [axis_sets.index(s) for s in pdef.index]
+    if len(pos) == 1:
+        return lambda combo: w[combo[pos[0]]]
+    return lambda combo: w[tuple(combo[p] for p in pos)]
+
+
 def _expr(bm: BoundModel, m: pyo.ConcreteModel, e: LinExpr, binding: dict[str, Any]):
     acc = e.const
     for t in e.terms:
-        w = bm.params.get(t.weight) if t.weight else None
-        if t.var is None and t.over is None:                       # scalar constant
-            acc += t.coef * (w if w is not None else 1.0)
-        elif t.var is None:                                        # data aggregate
-            rows = select_rows(bm, t.over, binding)
-            acc += t.coef * sum((w[i] if w is not None else 1.0) for i in rows)
-        else:                                                      # variable term
-            v = getattr(m, t.var)
-            rows = select_rows(bm, t.over, binding)
-            acc += t.coef * sum((w[i] if w is not None else 1.0) * v[i] for i in rows)
+        axes = dims(t)
+        if not axes:                                               # scalar constant / param
+            w = bm.params.get(t.weight) if t.weight else None
+            acc += t.coef * (float(w) if w is not None else 1.0)
+            continue
+        axis_sets = [d.set for d in axes]
+        wf = _weight_lookup(bm, t.weight, axis_sets)
+        members = [select_members(bm, d, binding) for d in axes]
+        v = getattr(m, t.var) if t.var else None
+        for combo in itertools.product(*members):
+            val = t.coef * wf(combo)
+            if v is None:                                          # data aggregate
+                acc += val
+            else:                                                  # variable term
+                acc += val * (v[combo[0]] if len(combo) == 1 else v[combo])
     return acc
 
 
 def compile_model(bm: BoundModel) -> pyo.ConcreteModel:
     m = pyo.ConcreteModel(name=bm.spec.name)
     m._ir_index = {}                                               # constraint name -> source_text
+    m._ir_vars = [v.name for v in bm.spec.vars]                    # so solve() needn't assume 'x'
 
     for s in bm.spec.sets:
         setattr(m, s.name, pyo.Set(initialize=bm.sets[s.name]))
@@ -123,14 +181,38 @@ def compile_model(bm: BoundModel) -> pyo.ConcreteModel:
     sense = pyo.maximize if bm.spec.objective.sense == "max" else pyo.minimize
     m.OBJ = pyo.Objective(expr=_expr(bm, m, bm.spec.objective.expr, {}), sense=sense)
 
+    errs: list[IRError] = []
+    m._ir_skipped = {}
     for c in bm.spec.constraints:
         block = pyo.ConstraintList()
         setattr(m, c.name, block)
+        skipped, contradictions = 0, []
         for g in forall_tuples(bm, c.forall):
             lhs = _expr(bm, m, c.lhs, g)
             rhs = _expr(bm, m, c.rhs, g)
-            block.add(lhs <= rhs if c.rel == "<=" else lhs >= rhs if c.rel == ">=" else lhs == rhs)
+            rel = (lhs <= rhs if c.rel == "<=" else
+                   lhs >= rhs if c.rel == ">=" else lhs == rhs)
+            if isinstance(rel, bool):
+                # Both sides are constants — no variable appears in this instance.
+                # True: vacuous, e.g. a time slot no task can cover. Normal, skip it.
+                # False: the DATA contradicts the model regardless of any decision.
+                if rel:
+                    skipped += 1
+                else:
+                    contradictions.append(g)
+                continue
+            block.add(rel)
+        if contradictions:
+            errs.append(IRError(
+                "CONSTANT_INFEASIBLE", f"constraints.{c.name}",
+                f"{len(contradictions)} instance(s) are false regardless of any "
+                f"decision, e.g. {contradictions[0] or '()'}: {c.source_text!r}",
+                "the data cannot satisfy this constraint — relax the bound"))
+        if skipped:
+            m._ir_skipped[c.name] = skipped
         m._ir_index[c.name] = c.source_text
+    if errs:
+        raise BindError(errs)
     return m
 
 
@@ -205,8 +287,14 @@ def solve(m: pyo.ConcreteModel, solver: str = "appsi_highs", tee: bool = False,
         return {"status": status, "objective": None}
     m.solutions.load_from(res)
 
-    picked = [i for i in m.x if pyo.value(m.x[i]) > 0.5]
-    report = {"status": status, "objective": float(pyo.value(m.OBJ)), "selected": picked, "constraints": []}
+    by_var = {}
+    for name in getattr(m, "_ir_vars", ["x"]):
+        v = getattr(m, name, None)
+        if v is not None:
+            by_var[name] = [i for i in v if pyo.value(v[i]) > 0.5]
+    first = next(iter(by_var.values()), [])
+    report = {"status": status, "objective": float(pyo.value(m.OBJ)),
+              "selected": first, "selected_by_var": by_var, "constraints": []}
     for name, text in m._ir_index.items():
         block = getattr(m, name)
         worst = None

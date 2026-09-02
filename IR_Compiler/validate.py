@@ -65,13 +65,26 @@ def validate(spec: ModelSpec) -> list[IRError]:
     varnames = {v.name for v in spec.vars}
 
     for s in spec.sets:
-        if s.table not in tables:
-            errs.append(IRError("UNKNOWN_TABLE", f"sets.{s.name}.table",
-                                f"table '{s.table}' is not declared",
-                                f"declare it in `tables` or use one of {sorted(tables)}"))
-        if s.kind == "categories" and not s.column:
-            errs.append(IRError("MISSING_COLUMN", f"sets.{s.name}",
-                                "a categories set needs a `column`", "set `column` to a categorical column"))
+        if s.kind == "literal":
+            if not s.members:
+                errs.append(IRError("EMPTY_SET", f"sets.{s.name}",
+                                    "a literal set needs `members`",
+                                    "list them, e.g. ['d1','d2'] for a driver pool"))
+            if s.table:
+                errs.append(IRError("SPURIOUS_TABLE", f"sets.{s.name}.table",
+                                    "a literal set has no table behind it", "drop `table`"))
+        else:
+            if not s.table:
+                errs.append(IRError("MISSING_TABLE", f"sets.{s.name}",
+                                    f"a {s.kind} set needs a `table`", "add `table`"))
+            elif s.table not in tables:
+                errs.append(IRError("UNKNOWN_TABLE", f"sets.{s.name}.table",
+                                    f"table '{s.table}' is not declared",
+                                    f"declare it in `tables` or use one of {sorted(tables)}"))
+            if s.kind == "categories" and not s.column:
+                errs.append(IRError("MISSING_COLUMN", f"sets.{s.name}",
+                                    "a categories set needs a `column`",
+                                    "set `column` to a categorical column"))
 
     for p in spec.params:
         if p.index and not p.column:
@@ -108,13 +121,34 @@ def validate(spec: ModelSpec) -> list[IRError]:
             if t.weight and t.weight not in params:
                 errs.append(IRError("UNKNOWN_PARAM", tl, f"undefined parameter '{t.weight}'",
                                     f"declare '{t.weight}' in `params` or bind it to a column"))
-            if t.var and t.over is None:
+            axes = dims(t)
+            if t.var and not axes:
                 errs.append(IRError("SCALAR_VAR", tl, "variables must be summed over an index set",
                                     "add an `over` clause"))
-            if t.over:
-                if t.over.set not in sets:
-                    errs.append(IRError("UNKNOWN_SET", tl, f"undefined set '{t.over.set}'", ""))
-                for pr in t.over.where:
+            # arity: one axis per declared variable dimension — this is the check
+            # whose absence let a 2-D variable reach the compiler and KeyError there
+            if t.var and axes:
+                vd = next((v for v in spec.vars if v.name == t.var), None)
+                if vd and len(axes) != len(vd.index):
+                    errs.append(IRError(
+                        "ARITY_MISMATCH", tl,
+                        f"variable '{t.var}' is indexed by {len(vd.index)} set(s) "
+                        f"{vd.index} but the term supplies {len(axes)} axis/axes",
+                        f"give `over` a list of {len(vd.index)} entries, one per dimension"))
+            for d in axes:
+                if d.set not in sets:
+                    errs.append(IRError("UNKNOWN_SET", tl, f"undefined set '{d.set}'", ""))
+                if d.bind:
+                    tgt = d.bind[1:]
+                    if tgt not in bound_sets:
+                        errs.append(IRError("UNBOUND_INDEX", tl,
+                                            f"axis bind '{d.bind}' is not in this constraint's `forall`",
+                                            f"add '{tgt}' to `forall`"))
+                if d.where and d.set in sets and sets[d.set].kind != "rows":
+                    errs.append(IRError("FILTER_ON_NONROW", tl,
+                                        f"`where` filters rows, but '{d.set}' is a "
+                                        f"{sets[d.set].kind} set", "drop the `where`"))
+                for pr in d.where:
                     if isinstance(pr.value, str) and pr.value.startswith("$"):
                         tgt = pr.value[1:]
                         if tgt not in bound_sets:
@@ -149,6 +183,17 @@ _OPS = {
 }
 
 
+def dims(term) -> list[IndexRef]:
+    """A term's index axes, normalized. One IndexRef -> [it]; a list -> itself.
+
+    This is the single place that hides the 1-D/N-D distinction, so selection
+    models (Track B) and assignment models (Track C) share every other code path.
+    """
+    if term.over is None:
+        return []
+    return list(term.over) if isinstance(term.over, list) else [term.over]
+
+
 def forall_tuples(bm: "BoundModel", forall: list[str]) -> list[dict[str, Any]]:
     if not forall:
         return [{}]
@@ -156,8 +201,14 @@ def forall_tuples(bm: "BoundModel", forall: list[str]) -> list[dict[str, Any]]:
     return [dict(zip(forall, combo)) for combo in itertools.product(*[bm.sets[g] for g in forall])]
 
 
-def select_rows(bm: "BoundModel", ref: IndexRef, binding: dict[str, Any]) -> list:
+def select_members(bm: "BoundModel", ref: IndexRef, binding: dict[str, Any]) -> list:
+    """Members of one axis: a bound axis yields exactly its bound value; a free
+    axis yields the filtered rows (row sets) or every member (categories/literal)."""
+    if ref.bind:
+        return [binding[ref.bind[1:]]]
     sdef = next(s for s in bm.spec.sets if s.name == ref.set)
+    if sdef.kind != "rows":
+        return list(bm.sets[ref.set])          # categories / literal: no row filtering
     df = bm.frames[sdef.table]
     mask = pd.Series(True, index=df.index)
     for pr in ref.where:
@@ -166,6 +217,11 @@ def select_rows(bm: "BoundModel", ref: IndexRef, binding: dict[str, Any]) -> lis
             val = binding[val[1:]]
         mask &= _OPS[pr.op](df[pr.column], val)
     return list(df.index[mask])
+
+
+# kept as the 1-D name the earlier code and tests use
+def select_rows(bm: "BoundModel", ref: IndexRef, binding: dict[str, Any]) -> list:
+    return select_members(bm, ref, binding)
 
 
 # ---------------------------------------------------------------- checkpoint 3: data
@@ -180,23 +236,29 @@ def check_bound(bm: "BoundModel") -> list[IRError]:
 
     for loc, forall, e in exprs:
         for k, t in enumerate(e.terms):
-            if not t.over:
-                continue
-            sdef = next(s for s in bm.spec.sets if s.name == t.over.set)
-            df = bm.frames[sdef.table]
             tl = f"{loc}.terms[{k}]"
-            missing = [pr.column for pr in t.over.where if pr.column not in df.columns]
-            if missing:
-                errs.append(IRError("UNKNOWN_COLUMN", tl,
-                                    f"no column(s) {missing} in table '{sdef.table}'",
-                                    f"use one of {list(df.columns)}"))
-                continue  # select_rows would KeyError on these predicates
-            if not t.over.where:
-                continue  # an unfiltered sum can't be empty unless the table is
-            for g in forall_tuples(bm, forall):
-                if len(select_rows(bm, t.over, g)) == 0:
+            for d in dims(t):
+                sdef = next(s for s in bm.spec.sets if s.name == d.set)
+                if sdef.kind != "rows" or d.bind:
+                    continue                     # nothing data-dependent to check
+                df = bm.frames[sdef.table]
+                missing = [pr.column for pr in d.where if pr.column not in df.columns]
+                if missing:
+                    errs.append(IRError("UNKNOWN_COLUMN", tl,
+                                        f"no column(s) {missing} in table '{sdef.table}'",
+                                        f"use one of {list(df.columns)}"))
+                    continue  # select_members would KeyError on these predicates
+                if not d.where:
+                    continue  # an unfiltered sum can't be empty unless the table is
+                tuples = forall_tuples(bm, forall)
+                empty = [g for g in tuples if len(select_members(bm, d, g)) == 0]
+                # Only a WHOLLY vacuous term is an error. Partial emptiness is
+                # normal and expected: a per-time-slot no-overlap constraint has
+                # idle slots, and flagging those would reject a correct model.
+                if empty and len(empty) == len(tuples):
                     errs.append(IRError(
                         "EMPTY_SELECTION", tl,
-                        f"filter selects no rows for {g or '()'} — constraint is vacuous or infeasible",
+                        f"filter selects no rows for any of the {len(tuples)} binding(s), "
+                        f"e.g. {empty[0] or '()'} — the term is vacuous",
                         "widen the filter, or raise the sample size"))
     return errs
