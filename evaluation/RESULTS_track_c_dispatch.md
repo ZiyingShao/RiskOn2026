@@ -39,6 +39,7 @@ Same brief, same constraints, 592 binary decisions instead of 100.
 | Haiku r0 | 627.05 | 627.05 | 0.00 | 25 | 0 | yes | **−41.5%** |
 | Haiku r1 | 658.34 | 658.34 | 0.00 | 25 | 0 | yes | **−38.6%** |
 | Haiku r2 | 494.80 | 494.80 | 0.00 | 22 | 0 | yes | **−53.9%** |
+| Sonnet r0 | 1062.85 | 1062.85 | 0.00 | 61 | 0 | yes | −0.9% |
 | Sonnet r1 | 1062.85 | 1062.85 | 0.00 | 61 | 0 | yes | −0.9% |
 | **pipeline** | **1072.44** | **1072.44** | **0.00** | **63** | **0** | **yes** | **0.0%** |
 
@@ -46,6 +47,13 @@ The small-model answers collapse: **22–25 requests served where 63 are
 servable**, leaving most of the fleet idle for most of the shift. Every answer
 is *feasible and internally consistent* — it just quietly forgoes 40–54% of the
 achievable revenue, and nothing in the JSON says so.
+
+The two Sonnet runs are the more interesting row: they returned the **identical
+answer** — same $1,062.85, same 61 tasks, same two requests left on the table —
+twice. The strong model is *stable*, and stably **$9.59 short**. Reproducibility
+is not correctness: run it again and you get the same near-miss with the same
+confidence, which is precisely the situation in which nobody goes looking for
+the missing $9.59.
 
 ## What actually distinguishes the two tracks
 

@@ -224,6 +224,23 @@ def select_rows(bm: "BoundModel", ref: IndexRef, binding: dict[str, Any]) -> lis
     return select_members(bm, ref, binding)
 
 
+def weight_lookup(bm: "BoundModel", wname: str | None, axis_sets: list[str]):
+    """f(combo) -> weight. A param indexed by a SUBSET of a term's axes is keyed
+    on just those axes: revenue[task] weighting y[task, driver] keys on task.
+    Lives here (pandas-only) so the compiler and the eval's fingerprint grader
+    cannot drift apart on how a weight is resolved."""
+    if wname is None:
+        return lambda combo: 1.0
+    w = bm.params[wname]
+    pdef = next(p for p in bm.spec.params if p.name == wname)
+    if not pdef.index:
+        return lambda combo: float(w)
+    pos = [axis_sets.index(s) for s in pdef.index]
+    if len(pos) == 1:
+        return lambda combo: w[combo[pos[0]]]
+    return lambda combo: w[tuple(combo[p] for p in pos)]
+
+
 # ---------------------------------------------------------------- checkpoint 3: data
 
 

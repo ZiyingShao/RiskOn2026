@@ -140,3 +140,46 @@ BRIEFS = [
 ]
 
 BY_NAME = {b["name"]: b for b in BRIEFS}
+
+# ---------------------------------------------------------------- Track C
+# Assignment / scheduling over an operational log. Same harness, different
+# archetype: the model needs a 2-D variable and a resource pool that the data
+# does not contain.
+
+_C_PREAMBLE = (
+    "A ride-hailing platform is dispatching a busy shift. The operational log "
+    "taxis.csv holds completed trips; treat each row in the shift window as a "
+    "pending customer request, with its pickup and dropoff timestamps, its "
+    "passenger count, and the fare in the `total` column as the revenue it "
+    "would earn. "
+)
+_C_SLICE = (" Work only the shift running from 08:00 to 09:00 on 2019-03-06.")
+
+_CS = {
+    "drivers": "Four drivers are on shift: d1, d2, d3 and d4.",
+    "once": "A customer request can be given to at most one driver, and some "
+            "requests will go unserved.",
+    "overlap": "No driver may receive overlapping schedules — a trip occupies "
+               "its driver from its pickup time until its dropoff time.",
+    "capacity": "Passenger counts must never exceed the four-seat vehicle limit.",
+    "objective": "Assign requests to drivers so as to maximise total platform "
+                 "revenue.",
+}
+
+TRACK_C_BRIEFS = [
+    {
+        "name": "dispatch",
+        "text": (_C_PREAMBLE + " ".join([_CS["drivers"], _CS["once"], _CS["overlap"],
+                                         _CS["capacity"], _CS["objective"]])
+                 + _C_SLICE),
+        "obligations": [_CS["once"], _CS["overlap"], _CS["capacity"], _CS["objective"]],
+        "reference": "dispatch.json",
+        "expect_infeasible": False,
+        "probe": "the assignment/scheduling archetype: needs a 2-D variable, a "
+                 "literal driver pool, parsed timestamps and an occupancy "
+                 "constraint — none of which the Track B grammar could express",
+    },
+]
+
+ALL_BRIEFS = BRIEFS + TRACK_C_BRIEFS
+ALL_BY_NAME = {b["name"]: b for b in ALL_BRIEFS}

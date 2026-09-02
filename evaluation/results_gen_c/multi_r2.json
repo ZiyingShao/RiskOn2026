@@ -1,0 +1,201 @@
+{
+ "name": "urban_dispatch_shift",
+ "tables": [
+  {
+   "name": "trips",
+   "path": "IR_Compiler/taxis.csv",
+   "filter": [
+    {
+     "column": "pickup",
+     "op": "gte",
+     "value": "2019-03-06 08:00:00"
+    },
+    {
+     "column": "pickup",
+     "op": "lt",
+     "value": "2019-03-06 09:00:00"
+    }
+   ],
+   "parse_datetime": [
+    "pickup",
+    "dropoff"
+   ]
+  }
+ ],
+ "sets": [
+  {
+   "name": "TASK",
+   "kind": "rows",
+   "table": "trips"
+  },
+  {
+   "name": "DRIVER",
+   "kind": "literal",
+   "members": [
+    "d1",
+    "d2",
+    "d3",
+    "d4"
+   ]
+  },
+  {
+   "name": "SLOT",
+   "kind": "categories",
+   "table": "trips",
+   "column": "pickup_min"
+  }
+ ],
+ "params": [
+  {
+   "name": "rev",
+   "index": [
+    "TASK"
+   ],
+   "table": "trips",
+   "column": "total"
+  },
+  {
+   "name": "pax",
+   "index": [
+    "TASK"
+   ],
+   "table": "trips",
+   "column": "passengers"
+  },
+  {
+   "name": "veh_cap",
+   "value": 4
+  }
+ ],
+ "vars": [
+  {
+   "name": "y",
+   "index": [
+    "TASK",
+    "DRIVER"
+   ],
+   "domain": "Binary"
+  }
+ ],
+ "objective": {
+  "sense": "max",
+  "source_text": "Assign requests to drivers so as to maximise total platform revenue.",
+  "expr": {
+   "terms": [
+    {
+     "var": "y",
+     "weight": "rev",
+     "over": [
+      {
+       "set": "TASK"
+      },
+      {
+       "set": "DRIVER"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "constraints": [
+  {
+   "name": "one_driver_per_task",
+   "source_text": "A customer request can be given to at most one driver, and some requests will go unserved.",
+   "forall": [
+    "TASK"
+   ],
+   "lhs": {
+    "terms": [
+     {
+      "var": "y",
+      "over": [
+       {
+        "set": "TASK",
+        "bind": "$TASK"
+       },
+       {
+        "set": "DRIVER"
+       }
+      ]
+     }
+    ]
+   },
+   "rel": "<=",
+   "rhs": {
+    "const": 1.0
+   }
+  },
+  {
+   "name": "no_overlapping_schedule",
+   "source_text": "No driver may receive overlapping schedules — a trip occupies its driver from its pickup time until its dropoff time.",
+   "forall": [
+    "DRIVER",
+    "SLOT"
+   ],
+   "lhs": {
+    "terms": [
+     {
+      "var": "y",
+      "over": [
+       {
+        "set": "TASK",
+        "where": [
+         {
+          "column": "pickup_min",
+          "op": "lte",
+          "value": "$SLOT"
+         },
+         {
+          "column": "dropoff_min",
+          "op": "gt",
+          "value": "$SLOT"
+         }
+        ]
+       },
+       {
+        "set": "DRIVER",
+        "bind": "$DRIVER"
+       }
+      ]
+     }
+    ]
+   },
+   "rel": "<=",
+   "rhs": {
+    "const": 1.0
+   }
+  },
+  {
+   "name": "vehicle_capacity",
+   "source_text": "Passenger counts must never exceed the four-seat vehicle limit.",
+   "forall": [
+    "TASK"
+   ],
+   "lhs": {
+    "terms": [
+     {
+      "var": "y",
+      "weight": "pax",
+      "over": [
+       {
+        "set": "TASK",
+        "bind": "$TASK"
+       },
+       {
+        "set": "DRIVER"
+       }
+      ]
+     }
+    ]
+   },
+   "rel": "<=",
+   "rhs": {
+    "terms": [
+     {
+      "weight": "veh_cap"
+     }
+    ]
+   }
+  }
+ ]
+}

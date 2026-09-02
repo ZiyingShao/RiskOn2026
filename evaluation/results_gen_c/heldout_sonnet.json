@@ -1,0 +1,80 @@
+{
+ "name": "shift_dispatch_revenue_max",
+ "tables": [
+  {
+   "name": "trips",
+   "path": "IR_Compiler/taxis.csv",
+   "filter": [
+    {"column": "pickup", "op": "gte", "value": "2019-03-06 08:00:00"},
+    {"column": "pickup", "op": "lt", "value": "2019-03-06 09:00:00"}
+   ],
+   "parse_datetime": ["pickup", "dropoff"]
+  }
+ ],
+ "sets": [
+  {"name": "TASK", "kind": "rows", "table": "trips"},
+  {"name": "DRIVER", "kind": "literal", "members": ["d1", "d2", "d3", "d4"]},
+  {"name": "SLOT", "kind": "categories", "table": "trips", "column": "pickup_min"}
+ ],
+ "params": [
+  {"name": "revenue", "index": ["TASK"], "table": "trips", "column": "total"},
+  {"name": "passengers", "index": ["TASK"], "table": "trips", "column": "passengers"},
+  {"name": "vehicle_capacity", "value": 4}
+ ],
+ "vars": [
+  {"name": "y", "index": ["TASK", "DRIVER"], "domain": "Binary"}
+ ],
+ "objective": {
+  "sense": "max",
+  "source_text": "Assign requests to drivers so as to maximise total platform revenue.",
+  "expr": {
+   "terms": [
+    {"coef": 1.0, "var": "y", "weight": "revenue", "over": [{"set": "TASK"}, {"set": "DRIVER"}]}
+   ]
+  }
+ },
+ "constraints": [
+  {
+   "name": "at_most_one_driver",
+   "forall": ["TASK"],
+   "source_text": "A customer request can be given to at most one driver, and some requests will go unserved.",
+   "lhs": {
+    "terms": [
+     {"var": "y", "over": [{"set": "TASK", "bind": "$TASK"}, {"set": "DRIVER"}]}
+    ]
+   },
+   "rel": "<=",
+   "rhs": {"terms": [], "const": 1.0}
+  },
+  {
+   "name": "no_overlapping_schedules",
+   "forall": ["DRIVER", "SLOT"],
+   "source_text": "No driver may receive overlapping schedules — a trip occupies its driver from its pickup time until its dropoff time.",
+   "lhs": {
+    "terms": [
+     {"var": "y", "over": [
+       {"set": "TASK", "where": [
+         {"column": "pickup_min", "op": "lte", "value": "$SLOT"},
+         {"column": "dropoff_min", "op": "gt", "value": "$SLOT"}
+       ]},
+       {"set": "DRIVER", "bind": "$DRIVER"}
+     ]}
+    ]
+   },
+   "rel": "<=",
+   "rhs": {"terms": [], "const": 1.0}
+  },
+  {
+   "name": "vehicle_capacity_limit",
+   "forall": ["TASK"],
+   "source_text": "Passenger counts must never exceed the four-seat vehicle limit.",
+   "lhs": {
+    "terms": [
+     {"var": "y", "weight": "passengers", "over": [{"set": "TASK", "bind": "$TASK"}, {"set": "DRIVER"}]}
+    ]
+   },
+   "rel": "<=",
+   "rhs": {"terms": [{"weight": "vehicle_capacity"}]}
+  }
+ ]
+}

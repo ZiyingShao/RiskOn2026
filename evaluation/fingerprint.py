@@ -26,6 +26,7 @@ harness normalizes `tables` before calling in here.
 from __future__ import annotations
 
 import hashlib
+import itertools
 import sys
 from collections import Counter
 from pathlib import Path
@@ -34,7 +35,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "IR_Compiler"))
 
 from ir import ModelSpec, LinExpr, ConstraintDef            # noqa: E402
-from validate import forall_tuples, select_rows              # noqa: E402
+from validate import forall_tuples, select_members, dims, weight_lookup              # noqa: E402
 from compiler import bind, BoundModel                        # noqa: E402
 
 ROUND = 9
@@ -62,22 +63,27 @@ def _row(bm: BoundModel, varmap: dict, lhs: LinExpr, rhs: LinExpr,
     const = 0.0
 
     def add(e: LinExpr, sign: float) -> None:
+        """Mirrors compiler._expr exactly — N-dimensional, sharing select_members
+        and weight_lookup with it, so the grader and the solver cannot disagree
+        about what a term means."""
         nonlocal const
         const -= sign * e.const
         for t in e.terms:
-            w = bm.params.get(t.weight) if t.weight else None
-            if t.var is None and t.over is None:
-                const -= sign * t.coef * (w if w is not None else 1.0)
-            elif t.var is None:
-                rows = select_rows(bm, t.over, binding)
-                const -= sign * t.coef * sum(
-                    (w[i] if w is not None else 1.0) for i in rows)
-            else:
-                rows = select_rows(bm, t.over, binding)
-                for i in rows:
-                    k = (varmap[t.var], i)
-                    coeffs[k] = coeffs.get(k, 0.0) + \
-                        sign * t.coef * (w[i] if w is not None else 1.0)
+            axes = dims(t)
+            if not axes:                                   # scalar constant / param
+                w = bm.params.get(t.weight) if t.weight else None
+                const -= sign * t.coef * (float(w) if w is not None else 1.0)
+                continue
+            axis_sets = [d.set for d in axes]
+            wf = weight_lookup(bm, t.weight, axis_sets)
+            members = [select_members(bm, d, binding) for d in axes]
+            for combo in itertools.product(*members):
+                val = sign * t.coef * wf(combo)
+                if t.var is None:                          # data aggregate
+                    const -= val
+                else:
+                    key = (varmap[t.var], combo[0] if len(combo) == 1 else combo)
+                    coeffs[key] = coeffs.get(key, 0.0) + val
 
     add(lhs, +1.0)
     add(rhs, -1.0)

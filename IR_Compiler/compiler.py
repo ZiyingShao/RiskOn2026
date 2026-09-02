@@ -23,7 +23,7 @@ import pyomo.environ as pyo
 
 from ir import ModelSpec, LinExpr
 from validate import (IRError, BindError, forall_tuples, select_members, dims,
-                      _OPS)
+                      weight_lookup, _OPS)
 
 # ---------------------------------------------------------------- binding
 
@@ -128,21 +128,6 @@ def bind(spec: ModelSpec, root: str = ".") -> BoundModel:
 # ---------------------------------------------------------------- compilation
 
 
-def _weight_lookup(bm: BoundModel, wname: str | None, axis_sets: list[str]):
-    """f(combo) -> weight. A param indexed by a SUBSET of the term's axes is keyed
-    on just those axes: revenue[task] weighting y[task, driver] keys on task."""
-    if wname is None:
-        return lambda combo: 1.0
-    w = bm.params[wname]
-    pdef = next(p for p in bm.spec.params if p.name == wname)
-    if not pdef.index:
-        return lambda combo: float(w)
-    pos = [axis_sets.index(s) for s in pdef.index]
-    if len(pos) == 1:
-        return lambda combo: w[combo[pos[0]]]
-    return lambda combo: w[tuple(combo[p] for p in pos)]
-
-
 def _expr(bm: BoundModel, m: pyo.ConcreteModel, e: LinExpr, binding: dict[str, Any]):
     acc = e.const
     for t in e.terms:
@@ -152,7 +137,7 @@ def _expr(bm: BoundModel, m: pyo.ConcreteModel, e: LinExpr, binding: dict[str, A
             acc += t.coef * (float(w) if w is not None else 1.0)
             continue
         axis_sets = [d.set for d in axes]
-        wf = _weight_lookup(bm, t.weight, axis_sets)
+        wf = weight_lookup(bm, t.weight, axis_sets)
         members = [select_members(bm, d, binding) for d in axes]
         v = getattr(m, t.var) if t.var else None
         for combo in itertools.product(*members):

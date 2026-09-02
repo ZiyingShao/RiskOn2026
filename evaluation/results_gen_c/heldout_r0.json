@@ -1,0 +1,160 @@
+{
+  "name": "ride_hailing_dispatch",
+  "tables": [
+    {
+      "name": "reqs",
+      "path": "taxis.csv",
+      "filter": [
+        {
+          "column": "pickup",
+          "op": "gte",
+          "value": "2019-03-06 08:00:00"
+        },
+        {
+          "column": "pickup",
+          "op": "lt",
+          "value": "2019-03-06 09:00:00"
+        }
+      ],
+      "parse_datetime": ["pickup", "dropoff"]
+    }
+  ],
+  "sets": [
+    {
+      "name": "REQUEST",
+      "kind": "rows",
+      "table": "reqs"
+    },
+    {
+      "name": "DRIVER",
+      "kind": "literal",
+      "members": ["d1", "d2", "d3", "d4"]
+    },
+    {
+      "name": "SLOT",
+      "kind": "categories",
+      "table": "reqs",
+      "column": "pickup_min"
+    }
+  ],
+  "params": [
+    {
+      "name": "revenue",
+      "index": ["REQUEST"],
+      "table": "reqs",
+      "column": "total"
+    },
+    {
+      "name": "passengers",
+      "index": ["REQUEST"],
+      "table": "reqs",
+      "column": "passengers"
+    },
+    {
+      "name": "seat_capacity",
+      "value": 4
+    }
+  ],
+  "vars": [
+    {
+      "name": "y",
+      "index": ["REQUEST", "DRIVER"],
+      "domain": "Binary"
+    }
+  ],
+  "objective": {
+    "sense": "max",
+    "source_text": "Assign requests to drivers so as to maximise total platform revenue.",
+    "expr": {
+      "terms": [
+        {
+          "coef": 1.0,
+          "var": "y",
+          "weight": "revenue",
+          "over": [
+            {"set": "REQUEST"},
+            {"set": "DRIVER"}
+          ]
+        }
+      ]
+    }
+  },
+  "constraints": [
+    {
+      "name": "single_assignment",
+      "source_text": "A customer request can be given to at most one driver, and some requests will go unserved.",
+      "forall": ["REQUEST"],
+      "lhs": {
+        "terms": [
+          {
+            "var": "y",
+            "over": [
+              {"set": "REQUEST", "bind": "$REQUEST"},
+              {"set": "DRIVER"}
+            ]
+          }
+        ]
+      },
+      "rel": "<=",
+      "rhs": {
+        "terms": [],
+        "const": 1.0
+      }
+    },
+    {
+      "name": "no_overlapping_schedules",
+      "source_text": "No driver may receive overlapping schedules — a trip occupies its driver from its pickup time until its dropoff time.",
+      "forall": ["DRIVER", "SLOT"],
+      "lhs": {
+        "terms": [
+          {
+            "var": "y",
+            "over": [
+              {
+                "set": "REQUEST",
+                "where": [
+                  {"column": "pickup_min", "op": "lte", "value": "$SLOT"},
+                  {"column": "dropoff_min", "op": "gt", "value": "$SLOT"}
+                ]
+              },
+              {"set": "DRIVER", "bind": "$DRIVER"}
+            ]
+          }
+        ]
+      },
+      "rel": "<=",
+      "rhs": {
+        "terms": [],
+        "const": 1.0
+      }
+    },
+    {
+      "name": "passenger_capacity",
+      "source_text": "Passenger counts must never exceed the four-seat vehicle limit.",
+      "forall": ["DRIVER", "SLOT"],
+      "lhs": {
+        "terms": [
+          {
+            "var": "y",
+            "weight": "passengers",
+            "over": [
+              {
+                "set": "REQUEST",
+                "where": [
+                  {"column": "pickup_min", "op": "lte", "value": "$SLOT"},
+                  {"column": "dropoff_min", "op": "gt", "value": "$SLOT"}
+                ]
+              },
+              {"set": "DRIVER", "bind": "$DRIVER"}
+            ]
+          }
+        ]
+      },
+      "rel": "<=",
+      "rhs": {
+        "terms": [],
+        "const": 4.0
+      }
+    }
+  ]
+}
