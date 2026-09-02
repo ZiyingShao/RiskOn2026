@@ -1,5 +1,5 @@
 {
- "name": "urban_dispatch_small",
+ "name": "urban_dispatch_large",
  "tables": [
   {
    "name": "trips",
@@ -8,12 +8,12 @@
     {
      "column": "pickup",
      "op": "gte",
-     "value": "2019-03-06 08:00:00"
+     "value": "2019-03-06 07:00:00"
     },
     {
      "column": "pickup",
      "op": "lt",
-     "value": "2019-03-06 09:00:00"
+     "value": "2019-03-06 11:00:00"
     }
    ],
    "parse_datetime": [
@@ -35,7 +35,11 @@
     "d1",
     "d2",
     "d3",
-    "d4"
+    "d4",
+    "d5",
+    "d6",
+    "d7",
+    "d8"
    ]
   },
   {

@@ -7,7 +7,20 @@ IR itself is ordinary JSON an LLM can produce. Run: python make_track_c.py
 import json
 from pathlib import Path
 
-DRIVERS = ["d1", "d2", "d3", "d4"]
+import sys
+
+# Two instances. The small one is the demo; the large one exists because the
+# small one turned out to be EASY — a direct LLM solves it — and the honest
+# question is where that stops being true.
+SIZES = {
+    "small": dict(drivers=4, start="2019-03-06 08:00:00", end="2019-03-06 09:00:00",
+                  out="track_c_dispatch.json"),
+    "large": dict(drivers=8, start="2019-03-06 07:00:00", end="2019-03-06 11:00:00",
+                  out="track_c_dispatch_large.json"),
+}
+SIZE = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1] in SIZES else "small"
+CFG = SIZES[SIZE]
+DRIVERS = [f"d{i+1}" for i in range(CFG["drivers"])]
 
 # Time discretisation note: a fixed grid of slots is both wasteful and WRONG —
 # two trips can overlap by less than one slot and never share a grid point.
@@ -17,12 +30,12 @@ DRIVERS = ["d1", "d2", "d3", "d4"]
 # the numeric pickup_min column already gives us — no new IR feature needed.
 
 spec = {
-    "name": "urban_dispatch",
+    "name": f"urban_dispatch_{SIZE}",
     "tables": [{
         "name": "trips", "path": "taxis.csv",
         # "ingest an operational time slice": one busy hour out of the log
-        "filter": [{"column": "pickup", "op": "gte", "value": "2019-03-06 08:00:00"},
-                   {"column": "pickup", "op": "lt", "value": "2019-03-06 09:00:00"}],
+        "filter": [{"column": "pickup", "op": "gte", "value": CFG["start"]},
+                   {"column": "pickup", "op": "lt", "value": CFG["end"]}],
         "parse_datetime": ["pickup", "dropoff"],
     }],
     "sets": [
@@ -73,7 +86,7 @@ spec = {
 }
 
 if __name__ == "__main__":
-    p = Path(__file__).resolve().parent / "track_c_dispatch.json"
+    p = Path(__file__).resolve().parent / CFG["out"]
     p.write_text(json.dumps(spec, indent=1) + "\n")
     print(f"wrote {p.name}: {len(DRIVERS)} drivers, event-based slots, "
           f"{len(spec['constraints'])} constraint families")
